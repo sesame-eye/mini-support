@@ -96,7 +96,7 @@
                 <input type="range" id="lowFreqSlider" min="60" max="350" step="10" value="150">
             </div>
             <div class="control-group">
-                <label>増幅/減衰: <span id="lowGainVal" class="value-disp">-12 dB</span></label>
+                <label>増幅/減衰: <span id="lowGainVal" class="value-disp">-24 dB</span></label>
                 <input type="range" id="lowGainSlider" min="-24" max="12" step="1" value="-12">
             </div>
         </div>
@@ -122,7 +122,7 @@
                 <input type="range" id="highFreqSlider" min="2500" max="6000" step="100" value="4000">
             </div>
             <div class="control-group">
-                <label>増幅/減衰: <span id="highGainVal" class="value-disp">6 dB</span></label>
+                <label>増幅/減衰: <span id="highGainVal" class="value-disp">-24 dB</span></label>
                 <input type="range" id="highGainSlider" min="-24" max="18" step="1" value="6">
             </div>
         </div>
@@ -268,7 +268,7 @@ startBtn.addEventListener('click', async () => {
 
         // 4. 全体アンプ (15倍程度に設定、EQで盛るため少しマイルドに)
         masterGain = audioCtx.createGain();
-        masterGain.gain.value = 15.0; 
+        masterGain.gain.value = 50.0; 
 
         // 5. ステレオ結合ルーティング
         splitter = audioCtx.createChannelSplitter(1);
