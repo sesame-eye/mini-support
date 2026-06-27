@@ -42,7 +42,7 @@
 
 <div class="container">
     <h1>👂 耳ともサポート</h1>
-    <p>iPadにイヤホン（有線推奨）を接続してから、下のボタンを押してください。iPadのマイクが拾った音が大きく聞こえます。</p>
+    <p>iPhone/iPadにイヤホンを接続してから、下のボタンを押してください。マイクが拾った音が大きく聞こえます。</p>
     
     <button id="startBtn">▶ 集音スタート</button>
     <button id="stopBtn" disabled>■ ストップ</button>
@@ -53,28 +53,42 @@
 <script>
 let audioCtx = null;
 let mediaStreamSource = null;
+let localStream = null;
 
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const statusText = document.getElementById('status');
 
+// iPhoneのセキュリティ対策：ユーザーが最初にボタンを押した瞬間にオーディオ空間を「解放」する
+function initAudioContext() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    // もしサスペンド（一時停止）状態なら再開させる
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+}
+
 startBtn.addEventListener('click', async () => {
+    // 1. iPhoneの再生ブロックを解除
+    initAudioContext();
+
     try {
-        // マイクの利用許可リクエスト（エコー・ノイズキャンセラーを切って超低遅延化）
-        const stream = await navigator.mediaDevices.getUserMedia({ 
+        // 2. マイクの利用許可リクエスト
+        localStream = await navigator.mediaDevices.getUserMedia({ 
             audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, 
             video: false 
         });
 
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        mediaStreamSource = audioCtx.createMediaStreamSource(stream);
+        mediaStreamSource = audioCtx.createMediaStreamSource(localStream);
 
-        // マイク音を出力（イヤホン）へダイレクトに接続
+        // 3. マイク音を出力（イヤホン）へ直結
         mediaStreamSource.connect(audioCtx.destination);
 
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        statusText.innerText = "⚡ 集音中...（マイクを音源に近づけてね）";
+        statusText.innerText = "⚡ 集音中...（マイクに近づけてね）";
         statusText.style.color = "#34c759";
     } catch (err) {
         console.error(err);
@@ -84,7 +98,15 @@ startBtn.addEventListener('click', async () => {
 });
 
 stopBtn.addEventListener('click', () => {
-    if (audioCtx) { audioCtx.close(); }
+    // 音声ストリームを完全に停止
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+    }
+    if (audioCtx) {
+        audioCtx.close().then(() => {
+            audioCtx = null;
+        });
+    }
     startBtn.disabled = false;
     stopBtn.disabled = true;
     statusText.innerText = "停止中";
