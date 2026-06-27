@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>音声特化！耳ともサポート</title>
+    <title>カスタム耳ともサポート</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -24,31 +24,71 @@
             width: 90%;
         }
         h1 { font-size: 24px; color: #1d1d1f; margin-bottom: 5px; }
-        p.warning { color: #ff3b30; font-size: 14px; font-weight: bold; margin-bottom: 20px; }
-        p.desc { color: #86868b; font-size: 14px; line-height: 1.5; margin-bottom: 20px;}
+        p.warning { color: #ff3b30; font-size: 13px; font-weight: bold; margin-bottom: 15px; }
         button {
-            font-size: 18px; font-weight: bold; padding: 18px 30px;
+            font-size: 18px; font-weight: bold; padding: 16px 30px;
             border: none; border-radius: 15px; cursor: pointer;
-            width: 100%; margin-top: 15px; transition: all 0.1s;
+            width: 100%; margin-top: 10px; transition: all 0.1s;
         }
         #startBtn { background-color: #0071e3; color: white; }
         #startBtn:active { background-color: #005bb5; transform: scale(0.98); }
         #stopBtn { background-color: #555; color: white; }
         #stopBtn:active { background-color: #333; transform: scale(0.98); }
         #stopBtn:disabled { background-color: #e5e5ea; color: #aeaeae; cursor:not-allowed; }
-        #status { margin-top: 25px; font-size: 18px; font-weight: bold; color: #1d1d1f; }
+        
+        /* コントロールパネルのスタイル */
+        .control-panel {
+            margin-top: 25px;
+            padding: 15px;
+            background-color: #f5f5f7;
+            border-radius: 12px;
+            text-align: left;
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-size: 14px;
+            font-weight: bold;
+            color: #1d1d1f;
+            margin-bottom: 5px;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin-top: 5px;
+        }
+        .value-disp {
+            float: right;
+            font-weight: normal;
+            color: #0071e3;
+        }
+        #status { margin-top: 20px; font-size: 16px; font-weight: bold; color: #1d1d1f; text-align: center;}
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>👂 耳ともサポート</h1>
-    <h1>【音声くっきりモード】</h1>
-    <p class="warning">⚠️注意：音が大きく増幅されます。<br>必ずイヤホンを装着してください。</p>
-    <p class="desc">風切り音などの不快な雑音を大幅にカットし、人の声の周波数（中高音域）だけを狙って強力に増幅します。</p>
+    <h1>【周波数カスタム版】</h1>
+    <p class="warning">⚠️注意：必ずイヤホンを装着して起動してください</p>
     
     <button id="startBtn">▶ 集音スタート</button>
     <button id="stopBtn" disabled>■ ストップ</button>
+    
+    <!-- リアルタイム調整パネル -->
+    <div class="control-panel">
+        <div class="control-group">
+            <label for="freqSlider">🔊 強調する周波数: <span id="freqVal" class="value-disp">2000 Hz</span></label>
+            <input type="range" id="freqSlider" min="500" max="5000" step="100" value="2000">
+            <span style="font-size: 11px; color:#86868b;">低め（500Hz: 男性の声） 〜 高め（4000Hz: 女性の声・子音）</span>
+        </div>
+        
+        <div class="control-group">
+            <label for="gainSlider">🎚 強調の強さ (ブースト): <span id="gainVal" class="value-disp">12 dB</span></label>
+            <input type="range" id="gainSlider" min="0" max="24" step="1" value="12">
+        </div>
+    </div>
     
     <div id="status">停止中</div>
 </div>
@@ -57,8 +97,8 @@
 let audioCtx = null;
 let mediaStreamSource = null;
 let localStream = null;
-let lowCutFilter = null;   // 低音カット用
-let voiceBoostFilter = null; // 声の強調用
+let lowCutFilter = null;
+let voiceBoostFilter = null;
 let gainNode = null;
 let splitter = null;
 let merger = null;
@@ -66,6 +106,10 @@ let merger = null;
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const statusText = document.getElementById('status');
+const freqSlider = document.getElementById('freqSlider');
+const freqVal = document.getElementById('freqVal');
+const gainSlider = document.getElementById('gainSlider');
+const gainVal = document.getElementById('gainVal');
 
 function initAudioContext() {
     if (!audioCtx) {
@@ -76,53 +120,74 @@ function initAudioContext() {
     }
 }
 
+// スライダーの値を画面にリアルタイム反映し、起動中ならフィルターにも即座に適用する
+freqSlider.addEventListener('input', (e) => {
+    const val = e.target.value;
+    freqVal.innerText = val + " Hz";
+    if (voiceBoostFilter) {
+        // Web Audio APIのパラメータを滑らかに変更
+        voiceBoostFilter.frequency.setValueAtTime(val, audioCtx.currentTime);
+    }
+});
+
+gainSlider.addEventListener('input', (e) => {
+    const val = e.target.value;
+    gainVal.innerText = val + " dB";
+    if (voiceBoostFilter) {
+        voiceBoostFilter.gain.setValueAtTime(val, audioCtx.currentTime);
+    }
+});
+
 startBtn.addEventListener('click', async () => {
     initAudioContext();
 
     try {
+        // マイク設定：できる限りiPhone本体のインカメラ側マイク（user）をOSに要求する
         localStream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, 
+            audio: { 
+                echoCancellation: false, 
+                noiseSuppression: false, 
+                autoGainControl: false,
+                facingMode: "user" 
+            }, 
             video: false 
         });
 
         mediaStreamSource = audioCtx.createMediaStreamSource(localStream);
 
-        // 1. 【ノイズ対策】ハイパスフィルター（低音カット）の設定
-        // 350Hz以下の「ボボボ」「ゴー」という風切り音や環境音をバッサリ削る
+        // 1. 低音ノイズカット（風切り音対策）
         lowCutFilter = audioCtx.createBiquadFilter();
         lowCutFilter.type = "highpass";
         lowCutFilter.frequency.value = 350; 
 
-        // 2. 【人の声強調】ピーキングフィルター（特定の帯域を狙い撃ち）の設定
-        // 人の声の輪郭（子音など）が一番集まる 2500Hz をピンポイントで 12分音量を上げる
+        // 2. 音声強調フィルター（スライダーの値で初期化）
         voiceBoostFilter = audioCtx.createBiquadFilter();
         voiceBoostFilter.type = "peaking";
-        voiceBoostFilter.frequency.value = 2500;
-        voiceBoostFilter.Q.value = 1.0;          // 影響を与える帯域の広さ（1.0で程よくマイルドに）
-        voiceBoostFilter.gain.value = 12.0;       // 2500Hz付近をさらに +12dB ブースト
+        voiceBoostFilter.frequency.value = freqSlider.value;
+        voiceBoostFilter.Q.value = 1.2; // 少しピンポイントに強調
+        voiceBoostFilter.gain.value = gainSlider.value;
 
-        // 3. 全体アンプ（増幅器）の作成
+        // 3. 全体マスターボリューム（一律20倍）
         gainNode = audioCtx.createGain();
-        gainNode.gain.value = 20.0; // フィルターで声が引き立つので、全体ゲインは少し抑えめの20倍に
+        gainNode.gain.value = 20.0; 
 
-        // 4. ステレオ分離・結合（前回のルーティングを維持）
+        // 4. ステレオ結合ルーティング（左右分離・結合）
         splitter = audioCtx.createChannelSplitter(1);
         merger = audioCtx.createChannelMerger(2);
 
-        // 5. 【重要】数珠つなぎに接続（直列のオーディオグラフ）
-        // マイク ＞ 低音カット ＞ 声強調 ＞ アンプ ＞ スプリッター ＞ マージャー ＞ 出力
+        // 5. 接続
         mediaStreamSource.connect(lowCutFilter);
         lowCutFilter.connect(voiceBoostFilter);
         voiceBoostFilter.connect(gainNode);
         gainNode.connect(splitter);
         
-        splitter.connect(merger, 0, 0); // 左へ
-        splitter.connect(merger, 0, 1); // 右へ
+        splitter.connect(merger, 0, 0); 
+        splitter.connect(merger, 0, 1); 
         merger.connect(audioCtx.destination);
 
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        statusText.innerText = "⚡ 音声特化フィルターで集音中...";
+        statusText.innerText = "⚡ ライブ集音中（スライダーで調整可能）";
         statusText.style.color = "#34c759";
     } catch (err) {
         console.error(err);
@@ -135,7 +200,6 @@ stopBtn.addEventListener('click', () => {
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
     }
-    // すべての接続を安全に解除
     if (mediaStreamSource) mediaStreamSource.disconnect();
     if (lowCutFilter) lowCutFilter.disconnect();
     if (voiceBoostFilter) voiceBoostFilter.disconnect();
@@ -146,6 +210,7 @@ stopBtn.addEventListener('click', () => {
     if (audioCtx) {
         audioCtx.close().then(() => {
             audioCtx = null;
+            voiceBoostFilter = null;
         });
     }
     startBtn.disabled = false;
