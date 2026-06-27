@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>爆音！耳ともサポート</title>
+    <title>iPhone本体マイク集音器</title>
     <style>
-        /* スタイルは変更なし（少し見やすくしました） */
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: #f0f0f5;
@@ -24,7 +23,7 @@
             max-width: 400px;
             width: 90%;
         }
-        h1 { font-size: 26px; color: #1d1d1f; margin-bottom: 5px; }
+        h1 { font-size: 24px; color: #1d1d1f; margin-bottom: 5px; }
         p.warning { color: #ff3b30; font-size: 14px; font-weight: bold; margin-bottom: 20px; }
         p.desc { color: #86868b; font-size: 14px; line-height: 1.5; margin-bottom: 20px;}
         button {
@@ -44,9 +43,9 @@
 
 <div class="container">
     <h1>👂 耳ともサポート</h1>
-    <h1>【爆音モード】</h1>
-    <p class="warning">⚠️注意：音が非常に大きくなります。<br>必ずイヤホンを装着してください。</p>
-    <p class="desc">iPhone/iPadのマイクが拾った音を、最大に増幅して両耳に届けます。マイクを相手の声に近づけてください。</p>
+    <h1>【本体マイク専用モード】</h1>
+    <p class="warning">⚠️注意：音が大きく増幅されます。<br>必ずイヤホンを装着してください。</p>
+    <p class="desc">イヤホンのマイクではなく、<b>iPhone本体のマイク</b>を使って集音します。iPhoneの画面側を相手に向けてください。</p>
     
     <button id="startBtn">▶ 集音スタート</button>
     <button id="stopBtn" disabled>■ ストップ</button>
@@ -58,13 +57,12 @@
 let audioCtx = null;
 let mediaStreamSource = null;
 let localStream = null;
-let gainNode = null; // ★追加：音量増幅器
+let gainNode = null;
 
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const statusText = document.getElementById('status');
 
-// iPhoneセキュリティ対策用
 function initAudioContext() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -74,61 +72,83 @@ function initAudioContext() {
     }
 }
 
+// 利用可能な音声入力デバイス（マイク）を探す関数
+async function getBuiltInMicrophoneDeviceId() {
+    // 一度マイク許可を取らないとデバイス名が取得できないためダミーで要求
+    await navigator.mediaDevices.getUserMedia({ audio: true });
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    
+    // iPhone本体の内蔵マイク（Built-in / iPhone Microphoneなど）を探す
+    // 見つからない場合はデフォルトのマイクを使用する
+    let targetId = null;
+    for (const device of devices) {
+        if (device.kind === 'audioinput') {
+            const label = device.label.toLowerCase();
+            // イヤホン（headset / microphone）以外の、本体マイク（iphone / built-in）を優先
+            if (label.includes('iphone') || label.includes('built-in') || label.includes('internal')) {
+                targetId = device.deviceId;
+                break;
+            }
+        }
+    }
+    return targetId;
+}
+
 startBtn.addEventListener('click', async () => {
-    // 1. iPhoneの再生ブロックを解除
     initAudioContext();
 
     try {
-        // 2. マイクの利用許可リクエスト
-        // ★修正：モノラル（1ch）入力を明示的にリクエスト
-        localStream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { 
-                echoCancellation: false, 
-                noiseSuppression: false, 
+        // 1. iPhone本体マイクのIDを取得を試みる
+        const builtInMicId = await getBuiltInMicrophoneDeviceId();
+        
+        // 2. 音声設定を指定してマイクを起動
+        const constraints = {
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
                 autoGainControl: false,
-                channelCount: 1 // モノラルマイクを要求
-            }, 
-            video: false 
-        });
+                channelCount: 1 // 強制的にモノラルとして扱う
+            },
+            video: false
+        };
 
+        // 本体マイクが見つかった場合は、それを指定する
+        if (builtInMicId) {
+            constraints.audio.deviceId = { exact: builtInMicId };
+        }
+
+        localStream = await navigator.mediaDevices.getUserMedia(constraints);
         mediaStreamSource = audioCtx.createMediaStreamSource(localStream);
 
-        // ★追加：音量増幅器（GainNode）を作成
+        // 3. アンプ（増幅器）の作成
         gainNode = audioCtx.createGain();
+        gainNode.gain.value = 25.0; // 音量を25倍に設定（聞き取りにくい場合は30.0等に調整してください）
 
-        // ★重要：増幅率（ゲイン）を設定（1.0が通常、10.0で10倍、50.0で50倍など）
-        // ⚠️難聴者向けに大胆に「20倍」に設定します。
-        // もしこれでも足りなければこの数字を 30.0 や 50.0 に上げてください。
-        gainNode.gain.value = 20.0; 
-
-        // ★修正：左右両耳から聞こえるように設定
-        // マイク入力（1ch）を、増幅器の入力（2ch）に自動的に配る設定
+        // 4. 1チャンネル（モノラル）を左右両耳（ステレオ）へ自動分配する設定
         mediaStreamSource.channelCountMode = 'explicit';
         mediaStreamSource.channelInterpretation = 'speakers';
 
-        // 3. 音声を繋ぐ（マイク ＞ ★増幅器 ＞ ★左右両方の出力）
-        // mediaStreamSource.connect(audioCtx.destination); // 修正前（直結）
-        mediaStreamSource.connect(gainNode); // マイクを増幅器へ
-        gainNode.connect(audioCtx.destination); // 増幅器を出力へ
+        // 5. 接続（マイク ＞ 増幅 ＞ 左右イヤホン）
+        mediaStreamSource.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
 
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        statusText.innerText = "⚡ 集音中...（左右両耳・爆音）";
+        statusText.innerText = "⚡ 本体マイクで集音中（両耳・大音量）";
         statusText.style.color = "#34c759";
     } catch (err) {
         console.error(err);
-        statusText.innerText = "エラー: マイクの許可が必要です。";
+        statusText.innerText = "エラー: マイクの切り替えに失敗しました。";
         statusText.style.color = "#ff3b30";
     }
 });
 
 stopBtn.addEventListener('click', () => {
-    // 音声ストリームを完全に停止
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
     }
     if (gainNode) {
-        gainNode.disconnect(); // 増幅器の接続を切る
+        gainNode.disconnect();
     }
     if (audioCtx) {
         audioCtx.close().then(() => {
