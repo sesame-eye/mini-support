@@ -88,6 +88,15 @@
     
     <!-- 3バンド・イコライザーパネル -->
     <div class="eq-panel">
+        <!-- 音声倍率（全体アンプ） -->
+        <div class="eq-section">
+            <div class="eq-title">🎚️ 全体マスターボリューム (音声倍率)</div>
+            <div class="control-group">
+                <label>音声倍率: <span id="volumeVal" class="value-disp">20 倍</span></label>
+                <input type="range" id="volumeSlider" min="1" max="100" step="1" value="20">
+            </div>
+        </div>
+
         <!-- 低音域 -->
         <div class="eq-section">
             <div class="eq-title">🎸 低音域 (雑音・環境音カット用)</div>
@@ -97,7 +106,7 @@
             </div>
             <div class="control-group">
                 <label>増幅/減衰: <span id="lowGainVal" class="value-disp">-24 dB</span></label>
-                <input type="range" id="lowGainSlider" min="-24" max="12" step="1" value="-12">
+                <input type="range" id="lowGainSlider" min="-24" max="12" step="1" value="-24">
             </div>
         </div>
 
@@ -123,7 +132,7 @@
             </div>
             <div class="control-group">
                 <label>増幅/減衰: <span id="highGainVal" class="value-disp">-24 dB</span></label>
-                <input type="range" id="highGainSlider" min="-24" max="18" step="1" value="6">
+                <input type="range" id="highGainSlider" min="-24" max="18" step="1" value="-24">
             </div>
         </div>
     </div>
@@ -156,6 +165,8 @@ const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const statusText = document.getElementById('status');
 const speechResult = document.getElementById('speechResult');
+const volumeSlider = document.getElementById('volumeSlider');
+const volumeVal = document.getElementById('volumeVal');
 
 // UI要素とEQの連動設定
 const sliders = {
@@ -176,6 +187,15 @@ Object.keys(sliders).forEach(key => {
             sliders[key].nodeProp().setValueAtTime(parseFloat(val), audioCtx.currentTime);
         }
     });
+});
+
+// ボリュームスライダーの独立イベント処理
+volumeSlider.addEventListener('input', (e) => {
+    const val = e.target.value;
+    volumeVal.innerText = val + " 倍";
+    if (audioCtx && isRunning && masterGain) {
+        masterGain.gain.setValueAtTime(parseFloat(val), audioCtx.currentTime);
+    }
 });
 
 function initAudioContext() {
@@ -266,9 +286,9 @@ startBtn.addEventListener('click', async () => {
         highFilter.frequency.value = sliders.highFreq.el.value;
         highFilter.gain.value = sliders.highGain.el.value;
 
-        // 4. 全体アンプ (15倍程度に設定、EQで盛るため少しマイルドに)
+        // 4. 全体アンプ (スライダーの初期値 20倍 を適用、最大100倍)
         masterGain = audioCtx.createGain();
-        masterGain.gain.value = 50.0; 
+        masterGain.gain.value = parseFloat(volumeSlider.value); 
 
         // 5. ステレオ結合ルーティング
         splitter = audioCtx.createChannelSplitter(1);
