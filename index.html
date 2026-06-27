@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>iPhone本体マイク集音器</title>
+    <title>両耳爆音！耳ともサポート</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -43,9 +43,9 @@
 
 <div class="container">
     <h1>👂 耳ともサポート</h1>
-    <h1>【本体マイク専用モード】</h1>
-    <p class="warning">⚠️注意：音が大きく増幅されます。<br>必ずイヤホンを装着してください。</p>
-    <p class="desc">イヤホンのマイクではなく、<b>iPhone本体のマイク</b>を使って集音します。iPhoneの画面側を相手に向けてください。</p>
+    <h1>【左右ステレオ結合モード】</h1>
+    <p class="warning">⚠️注意：音が非常に大きくなります。<br>必ずイヤホンを装着してください。</p>
+    <p class="desc">マイクのモノラル音声を、内部で左右両方のチャンネルへ完全にコピーして結合しました。両耳から大音量で聞こえます。</p>
     
     <button id="startBtn">▶ 集音スタート</button>
     <button id="stopBtn" disabled>■ ストップ</button>
@@ -58,6 +58,8 @@ let audioCtx = null;
 let mediaStreamSource = null;
 let localStream = null;
 let gainNode = null;
+let splitter = null;
+let merger = null;
 
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
@@ -72,73 +74,48 @@ function initAudioContext() {
     }
 }
 
-// 利用可能な音声入力デバイス（マイク）を探す関数
-async function getBuiltInMicrophoneDeviceId() {
-    // 一度マイク許可を取らないとデバイス名が取得できないためダミーで要求
-    await navigator.mediaDevices.getUserMedia({ audio: true });
-    const devices = await navigator.mediaDevices.enumerateDevices();
-    
-    // iPhone本体の内蔵マイク（Built-in / iPhone Microphoneなど）を探す
-    // 見つからない場合はデフォルトのマイクを使用する
-    let targetId = null;
-    for (const device of devices) {
-        if (device.kind === 'audioinput') {
-            const label = device.label.toLowerCase();
-            // イヤホン（headset / microphone）以外の、本体マイク（iphone / built-in）を優先
-            if (label.includes('iphone') || label.includes('built-in') || label.includes('internal')) {
-                targetId = device.deviceId;
-                break;
-            }
-        }
-    }
-    return targetId;
-}
-
 startBtn.addEventListener('click', async () => {
     initAudioContext();
 
     try {
-        // 1. iPhone本体マイクのIDを取得を試みる
-        const builtInMicId = await getBuiltInMicrophoneDeviceId();
-        
-        // 2. 音声設定を指定してマイクを起動
-        const constraints = {
-            audio: {
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-                channelCount: 1 // 強制的にモノラルとして扱う
-            },
-            video: false
-        };
+        // iOS Safariの制御不可能なマイクバグを考慮し、OS標準の最適設定でマイクを取得
+        localStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: { 
+                echoCancellation: false, 
+                noiseSuppression: false, 
+                autoGainControl: false
+            }, 
+            video: false 
+        });
 
-        // 本体マイクが見つかった場合は、それを指定する
-        if (builtInMicId) {
-            constraints.audio.deviceId = { exact: builtInMicId };
-        }
-
-        localStream = await navigator.mediaDevices.getUserMedia(constraints);
         mediaStreamSource = audioCtx.createMediaStreamSource(localStream);
 
-        // 3. アンプ（増幅器）の作成
+        // 1. アンプ（増幅器）の作成と設定
         gainNode = audioCtx.createGain();
-        gainNode.gain.value = 25.0; // 音量を25倍に設定（聞き取りにくい場合は30.0等に調整してください）
+        gainNode.gain.value = 25.0; // 25倍増幅（好みに応じて数値を調整してください）
 
-        // 4. 1チャンネル（モノラル）を左右両耳（ステレオ）へ自動分配する設定
-        mediaStreamSource.channelCountMode = 'explicit';
-        mediaStreamSource.channelInterpretation = 'speakers';
+        // 2. ユーザー直伝：Safariのバグを回避する確実なステレオ分離・結合ルーティング
+        splitter = audioCtx.createChannelSplitter(1); // モノラル入力を1つに分解
+        merger = audioCtx.createChannelMerger(2);     // ステレオ出力用に2つを結合
 
-        // 5. 接続（マイク ＞ 増幅 ＞ 左右イヤホン）
-        mediaStreamSource.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
+        // 3. オーディオグラフの接続
+        mediaStreamSource.connect(gainNode); // マイク ＞ 増幅器
+        gainNode.connect(splitter);          // 増幅器 ＞ スプリッター
+
+        // 分解したモノラル信号（0番目）を、マージャーの左（0番目）と右（1番目）にそれぞれ手動コピー
+        splitter.connect(merger, 0, 0); // 左へ
+        splitter.connect(merger, 0, 1); // 右へ
+
+        // 最終出力をイヤホンへ
+        merger.connect(audioCtx.destination);
 
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        statusText.innerText = "⚡ 本体マイクで集音中（両耳・大音量）";
+        statusText.innerText = "⚡ 左右コピー処理で集音中...（両耳・大音量）";
         statusText.style.color = "#34c759";
     } catch (err) {
         console.error(err);
-        statusText.innerText = "エラー: マイクの切り替えに失敗しました。";
+        statusText.innerText = "エラー: マイクの起動に失敗しました。";
         statusText.style.color = "#ff3b30";
     }
 });
@@ -147,9 +124,11 @@ stopBtn.addEventListener('click', () => {
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
     }
-    if (gainNode) {
-        gainNode.disconnect();
-    }
+    // ノードの接続を安全に解除
+    if (splitter) splitter.disconnect();
+    if (merger) merger.disconnect();
+    if (gainNode) gainNode.disconnect();
+    
     if (audioCtx) {
         audioCtx.close().then(() => {
             audioCtx = null;
