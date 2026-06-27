@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>カスタム耳ともサポート</title>
+    <title>特化型・耳ともサポートPro</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -11,24 +11,26 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
+            padding: 20px 0;
         }
         .container {
             background-color: white;
-            padding: 30px;
+            padding: 25px;
             border-radius: 20px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             text-align: center;
-            max-width: 400px;
+            max-width: 440px;
             width: 90%;
         }
-        h1 { font-size: 24px; color: #1d1d1f; margin-bottom: 5px; }
-        p.warning { color: #ff3b30; font-size: 13px; font-weight: bold; margin-bottom: 15px; }
+        h1 { font-size: 22px; color: #1d1d1f; margin: 0 0 5px 0; }
+        .subtitle { font-size: 14px; color: #86868b; margin-bottom: 15px; }
+        
         button {
             font-size: 18px; font-weight: bold; padding: 16px 30px;
             border: none; border-radius: 15px; cursor: pointer;
-            width: 100%; margin-top: 10px; transition: all 0.1s;
+            width: 100%; margin-top: 5px; transition: all 0.1s;
         }
         #startBtn { background-color: #0071e3; color: white; }
         #startBtn:active { background-color: #005bb5; transform: scale(0.98); }
@@ -36,80 +38,145 @@
         #stopBtn:active { background-color: #333; transform: scale(0.98); }
         #stopBtn:disabled { background-color: #e5e5ea; color: #aeaeae; cursor:not-allowed; }
         
-        /* コントロールパネルのスタイル */
-        .control-panel {
-            margin-top: 25px;
+        /* EQパネルのスタイル */
+        .eq-panel {
+            margin-top: 20px;
             padding: 15px;
             background-color: #f5f5f7;
-            border-radius: 12px;
+            border-radius: 14px;
             text-align: left;
         }
-        .control-group {
-            margin-bottom: 15px;
+        .eq-section {
+            border-bottom: 1px solid #e5e5ea;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
         }
-        label {
-            display: block;
-            font-size: 14px;
-            font-weight: bold;
-            color: #1d1d1f;
-            margin-bottom: 5px;
+        .eq-section:last-child { border: none; padding-bottom: 0; margin-bottom: 0; }
+        .eq-title { font-size: 13px; font-weight: bold; color: #86868b; margin-bottom: 5px; text-transform: uppercase;}
+        .control-group { margin-bottom: 8px; }
+        label { display: block; font-size: 14px; font-weight: bold; color: #1d1d1f; }
+        input[type="range"] { width: 100%; margin-top: 4px; }
+        .value-disp { float: right; font-weight: bold; color: #0071e3; }
+
+        /* 文字起こしエリア */
+        .speech-panel {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #1d1d1f;
+            color: #34c759;
+            border-radius: 14px;
+            text-align: left;
+            min-height: 100px;
+            max-height: 150px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 15px;
+            line-height: 1.4;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.3);
         }
-        input[type="range"] {
-            width: 100%;
-            margin-top: 5px;
-        }
-        .value-disp {
-            float: right;
-            font-weight: normal;
-            color: #0071e3;
-        }
-        #status { margin-top: 20px; font-size: 16px; font-weight: bold; color: #1d1d1f; text-align: center;}
+        #status { margin-top: 15px; font-size: 15px; font-weight: bold; color: #1d1d1f; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>👂 耳ともサポート</h1>
-    <h1>【周波数カスタム版】</h1>
-    <p class="warning">⚠️注意：必ずイヤホンを装着して起動してください</p>
+    <h1>👂 耳ともサポート Pro</h1>
+    <div class="subtitle">【3バンドEQ × リアルタイム文字起こし】</div>
     
-    <button id="startBtn">▶ 集音スタート</button>
+    <button id="startBtn">▶ 集音＆文字起こし スタート</button>
     <button id="stopBtn" disabled>■ ストップ</button>
     
-    <!-- リアルタイム調整パネル -->
-    <div class="control-panel">
-        <div class="control-group">
-            <label for="freqSlider">🔊 強調する周波数: <span id="freqVal" class="value-disp">2000 Hz</span></label>
-            <input type="range" id="freqSlider" min="500" max="5000" step="100" value="2000">
-            <span style="font-size: 11px; color:#86868b;">低め（500Hz: 男性の声） 〜 高め（4000Hz: 女性の声・子音）</span>
+    <!-- 3バンド・イコライザーパネル -->
+    <div class="eq-panel">
+        <!-- 低音域 -->
+        <div class="eq-section">
+            <div class="eq-title">🎸 低音域 (雑音・環境音カット用)</div>
+            <div class="control-group">
+                <label>周波数境界: <span id="lowFreqVal" class="value-disp">150 Hz</span></label>
+                <input type="range" id="lowFreqSlider" min="60" max="350" step="10" value="150">
+            </div>
+            <div class="control-group">
+                <label>増幅/減衰: <span id="lowGainVal" class="value-disp">-12 dB</span></label>
+                <input type="range" id="lowGainSlider" min="-24" max="12" step="1" value="-12">
+            </div>
         </div>
-        
-        <div class="control-group">
-            <label for="gainSlider">🎚 強調の強さ (ブースト): <span id="gainVal" class="value-disp">12 dB</span></label>
-            <input type="range" id="gainSlider" min="0" max="24" step="1" value="12">
+
+        <!-- 中音域 -->
+        <div class="eq-section">
+            <div class="eq-title">🗣️ 中音域 (人の声・主成分)</div>
+            <div class="control-group">
+                <label>中心周波数: <span id="midFreqVal" class="value-disp">1500 Hz</span></label>
+                <input type="range" id="midFreqSlider" min="500" max="3000" step="50" value="1500">
+            </div>
+            <div class="control-group">
+                <label>増幅/減衰: <span id="midGainVal" class="value-disp">12 dB</span></label>
+                <input type="range" id="midGainSlider" min="-12" max="24" step="1" value="12">
+            </div>
         </div>
+
+        <!-- 高音域 -->
+        <div class="eq-section">
+            <div class="eq-title">⚡ 高音域 (言葉の輪郭・子音)</div>
+            <div class="control-group">
+                <label>周波数境界: <span id="highFreqVal" class="value-disp">4000 Hz</span></label>
+                <input type="range" id="highFreqSlider" min="2500" max="6000" step="100" value="4000">
+            </div>
+            <div class="control-group">
+                <label>増幅/減衰: <span id="highGainVal" class="value-disp">6 dB</span></label>
+                <input type="range" id="highGainSlider" min="-24" max="18" step="1" value="6">
+            </div>
+        </div>
+    </div>
+
+    <!-- 文字起こしモニター -->
+    <div class="speech-panel" id="speechResult">
+        [ここに会話がテキスト化されます]
     </div>
     
     <div id="status">停止中</div>
 </div>
 
 <script>
+// オーディオノード用変数
 let audioCtx = null;
 let mediaStreamSource = null;
 let localStream = null;
-let lowCutFilter = null;
-let voiceBoostFilter = null;
-let gainNode = null;
+let lowFilter = null;
+let midFilter = null;
+let highFilter = null;
+let masterGain = null;
 let splitter = null;
 let merger = null;
+
+// 音声認識用変数
+let recognition = null;
+let isRunning = false;
 
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const statusText = document.getElementById('status');
-const freqSlider = document.getElementById('freqSlider');
-const freqVal = document.getElementById('freqVal');
-const gainSlider = document.getElementById('gainSlider');
-const gainVal = document.getElementById('gainVal');
+const speechResult = document.getElementById('speechResult');
+
+// UI要素とEQの連動設定
+const sliders = {
+    lowFreq: { el: document.getElementById('lowFreqSlider'), disp: document.getElementById('lowFreqVal'), unit: ' Hz', nodeProp: () => lowFilter.frequency },
+    lowGain: { el: document.getElementById('lowGainSlider'), disp: document.getElementById('lowGainVal'), unit: ' dB', nodeProp: () => lowFilter.gain },
+    midFreq: { el: document.getElementById('midFreqSlider'), disp: document.getElementById('midFreqVal'), unit: ' Hz', nodeProp: () => midFilter.frequency },
+    midGain: { el: document.getElementById('midGainSlider'), disp: document.getElementById('midGainVal'), unit: ' dB', nodeProp: () => midFilter.gain },
+    highFreq: { el: document.getElementById('highFreqSlider'), disp: document.getElementById('highFreqVal'), unit: ' Hz', nodeProp: () => highFilter.frequency },
+    highGain: { el: document.getElementById('highGainSlider'), disp: document.getElementById('highGainVal'), unit: ' dB', nodeProp: () => highFilter.gain }
+};
+
+// スライダーイベントの一括登録
+Object.keys(sliders).forEach(key => {
+    sliders[key].el.addEventListener('input', (e) => {
+        const val = e.target.value;
+        sliders[key].disp.innerText = val + sliders[key].unit;
+        if (audioCtx && isRunning) {
+            sliders[key].nodeProp().setValueAtTime(parseFloat(val), audioCtx.currentTime);
+        }
+    });
+});
 
 function initAudioContext() {
     if (!audioCtx) {
@@ -120,97 +187,140 @@ function initAudioContext() {
     }
 }
 
-// スライダーの値を画面にリアルタイム反映し、起動中ならフィルターにも即座に適用する
-freqSlider.addEventListener('input', (e) => {
-    const val = e.target.value;
-    freqVal.innerText = val + " Hz";
-    if (voiceBoostFilter) {
-        // Web Audio APIのパラメータを滑らかに変更
-        voiceBoostFilter.frequency.setValueAtTime(val, audioCtx.currentTime);
+// 音声認識（文字起こし）の初期化
+function initSpeechRecognition() {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        speechResult.innerText = "⚠️ お使いのブラウザ・環境は文字起こしに非対応です。";
+        return;
     }
-});
-
-gainSlider.addEventListener('input', (e) => {
-    const val = e.target.value;
-    gainVal.innerText = val + " dB";
-    if (voiceBoostFilter) {
-        voiceBoostFilter.gain.setValueAtTime(val, audioCtx.currentTime);
-    }
-});
+    
+    recognition = new SpeechRecognition();
+    recognition.lang = 'ja-JP';
+    recognition.interimResults = true; // 話している途中の言葉も表示する
+    recognition.continuous = true;     // 途切れても自動で終了せずスピーチを続ける
+    
+    recognition.onstart = () => {
+        speechResult.innerText = "【文字起こし開始... 話しかけてください】\n";
+    };
+    
+    recognition.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            if (event.results[i].isFinal) {
+                finalTranscript += event.results[i][0].transcript + '\n';
+            } else {
+                interimTranscript += event.results[i][0].transcript;
+            }
+        }
+        // 画面に表示（確定した文字を白、推測中の文字を緑っぽく表現などできますが、今回はシンプルに結合）
+        speechResult.innerText = finalTranscript + (interimTranscript ? "☁️ " + interimTranscript : "");
+        // 常に最下部までスクロール
+        speechResult.scrollTop = speechResult.scrollHeight;
+    };
+    
+    recognition.onerror = (event) => {
+        console.error("音声認識エラー:", event.error);
+        // 途中で切れた場合の自動復帰処理はstopBtnで制御
+    };
+    
+    recognition.onend = () => {
+        // ボタンが押されて停止したわけじゃないなら、認識を再スタートさせる（Safariのタイムアウト対策）
+        if (isRunning) {
+            recognition.start();
+        }
+    };
+}
 
 startBtn.addEventListener('click', async () => {
     initAudioContext();
+    initSpeechRecognition();
+    isRunning = true;
 
     try {
-        // マイク設定：できる限りiPhone本体のインカメラ側マイク（user）をOSに要求する
         localStream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { 
-                echoCancellation: false, 
-                noiseSuppression: false, 
-                autoGainControl: false,
-                facingMode: "user" 
-            }, 
+            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, facingMode: "user" }, 
             video: false 
         });
 
         mediaStreamSource = audioCtx.createMediaStreamSource(localStream);
 
-        // 1. 低音ノイズカット（風切り音対策）
-        lowCutFilter = audioCtx.createBiquadFilter();
-        lowCutFilter.type = "highpass";
-        lowCutFilter.frequency.value = 350; 
+        // 1. 低域フィルター (lowshelf: 指定周波数以下を一括で音量変更)
+        lowFilter = audioCtx.createBiquadFilter();
+        lowFilter.type = "lowshelf";
+        lowFilter.frequency.value = sliders.lowFreq.el.value;
+        lowFilter.gain.value = sliders.lowGain.el.value;
 
-        // 2. 音声強調フィルター（スライダーの値で初期化）
-        voiceBoostFilter = audioCtx.createBiquadFilter();
-        voiceBoostFilter.type = "peaking";
-        voiceBoostFilter.frequency.value = freqSlider.value;
-        voiceBoostFilter.Q.value = 1.2; // 少しピンポイントに強調
-        voiceBoostFilter.gain.value = gainSlider.value;
+        // 2. 中域フィルター (peaking: 指定周波数の前後をピンポイントで音量変更)
+        midFilter = audioCtx.createBiquadFilter();
+        midFilter.type = "peaking";
+        midFilter.frequency.value = sliders.midFreq.el.value;
+        midFilter.Q.value = 1.0;
+        midFilter.gain.value = sliders.midGain.el.value;
 
-        // 3. 全体マスターボリューム（一律20倍）
-        gainNode = audioCtx.createGain();
-        gainNode.gain.value = 20.0; 
+        // 3. 高域フィルター (highshelf: 指定周波数以上を一括で音量変更)
+        highFilter = audioCtx.createBiquadFilter();
+        highFilter.type = "highshelf";
+        highFilter.frequency.value = sliders.highFreq.el.value;
+        highFilter.gain.value = sliders.highGain.el.value;
 
-        // 4. ステレオ結合ルーティング（左右分離・結合）
+        // 4. 全体アンプ (15倍程度に設定、EQで盛るため少しマイルドに)
+        masterGain = audioCtx.createGain();
+        masterGain.gain.value = 15.0; 
+
+        // 5. ステレオ結合ルーティング
         splitter = audioCtx.createChannelSplitter(1);
         merger = audioCtx.createChannelMerger(2);
 
-        // 5. 接続
-        mediaStreamSource.connect(lowCutFilter);
-        lowCutFilter.connect(voiceBoostFilter);
-        voiceBoostFilter.connect(gainNode);
-        gainNode.connect(splitter);
+        // 直列接続：マイク ＞ 低音EQ ＞ 中音EQ ＞ 高音EQ ＞ アンプ ＞ 左右分配 ＞ 出力
+        mediaStreamSource.connect(lowFilter);
+        lowFilter.connect(midFilter);
+        midFilter.connect(highFilter);
+        highFilter.connect(masterGain);
+        masterGain.connect(splitter);
         
         splitter.connect(merger, 0, 0); 
         splitter.connect(merger, 0, 1); 
         merger.connect(audioCtx.destination);
 
+        // 音声認識スタート
+        if (recognition) recognition.start();
+
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        statusText.innerText = "⚡ ライブ集音中（スライダーで調整可能）";
+        statusText.innerText = "⚡ フルカスタム集音＆文字起こし中...";
         statusText.style.color = "#34c759";
     } catch (err) {
         console.error(err);
-        statusText.innerText = "エラー: マイクの起動に失敗しました。";
+        statusText.innerText = "エラー: マイクまたは音声認識の起動に失敗しました。";
         statusText.style.color = "#ff3b30";
     }
 });
 
 stopBtn.addEventListener('click', () => {
+    isRunning = false;
+    
+    if (recognition) {
+        recognition.stop();
+    }
+
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
     }
+    
     if (mediaStreamSource) mediaStreamSource.disconnect();
-    if (lowCutFilter) lowCutFilter.disconnect();
-    if (voiceBoostFilter) voiceBoostFilter.disconnect();
-    if (gainNode) gainNode.disconnect();
+    if (lowFilter) lowFilter.disconnect();
+    if (midFilter) midFilter.disconnect();
+    if (highFilter) highFilter.disconnect();
+    if (masterGain) masterGain.disconnect();
     if (splitter) splitter.disconnect();
     if (merger) merger.disconnect();
     
     if (audioCtx) {
         audioCtx.close().then(() => {
             audioCtx = null;
-            voiceBoostFilter = null;
         });
     }
     startBtn.disabled = false;
