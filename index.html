@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>耳ともサポート</title>
+    <title>爆音！耳ともサポート</title>
     <style>
+        /* スタイルは変更なし（少し見やすくしました） */
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #f5f5f7;
+            background-color: #f0f0f5;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -18,31 +19,34 @@
             background-color: white;
             padding: 30px;
             border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
             text-align: center;
             max-width: 400px;
             width: 90%;
         }
-        h1 { font-size: 24px; color: #1d1d1f; margin-bottom: 10px; }
-        p { color: #86868b; font-size: 14px; line-height: 1.5; }
+        h1 { font-size: 26px; color: #1d1d1f; margin-bottom: 5px; }
+        p.warning { color: #ff3b30; font-size: 14px; font-weight: bold; margin-bottom: 20px; }
+        p.desc { color: #86868b; font-size: 14px; line-height: 1.5; margin-bottom: 20px;}
         button {
-            font-size: 18px; font-weight: bold; padding: 15px 30px;
-            border: none; border-radius: 12px; cursor: pointer;
-            width: 100%; margin-top: 15px; transition: all 0.2s;
+            font-size: 18px; font-weight: bold; padding: 18px 30px;
+            border: none; border-radius: 15px; cursor: pointer;
+            width: 100%; margin-top: 15px; transition: all 0.1s;
         }
         #startBtn { background-color: #0071e3; color: white; }
-        #startBtn:active { background-color: #005bb5; }
-        #stopBtn { background-color: #ff3b30; color: white; }
-        #stopBtn:active { background-color: #d63026; }
+        #startBtn:active { background-color: #005bb5; transform: scale(0.98); }
+        #stopBtn { background-color: #555; color: white; }
+        #stopBtn:active { background-color: #333; transform: scale(0.98); }
         #stopBtn:disabled { background-color: #e5e5ea; color: #aeaeae; cursor:not-allowed; }
-        #status { margin-top: 20px; font-weight: bold; color: #1d1d1f; }
+        #status { margin-top: 25px; font-size: 18px; font-weight: bold; color: #1d1d1f; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>👂 耳ともサポート</h1>
-    <p>iPhone/iPadにイヤホンを接続してから、下のボタンを押してください。マイクが拾った音が大きく聞こえます。</p>
+    <h1>【爆音モード】</h1>
+    <p class="warning">⚠️注意：音が非常に大きくなります。<br>必ずイヤホンを装着してください。</p>
+    <p class="desc">iPhone/iPadのマイクが拾った音を、最大に増幅して両耳に届けます。マイクを相手の声に近づけてください。</p>
     
     <button id="startBtn">▶ 集音スタート</button>
     <button id="stopBtn" disabled>■ ストップ</button>
@@ -54,17 +58,17 @@
 let audioCtx = null;
 let mediaStreamSource = null;
 let localStream = null;
+let gainNode = null; // ★追加：音量増幅器
 
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const statusText = document.getElementById('status');
 
-// iPhoneのセキュリティ対策：ユーザーが最初にボタンを押した瞬間にオーディオ空間を「解放」する
+// iPhoneセキュリティ対策用
 function initAudioContext() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
-    // もしサスペンド（一時停止）状態なら再開させる
     if (audioCtx.state === 'suspended') {
         audioCtx.resume();
     }
@@ -76,19 +80,40 @@ startBtn.addEventListener('click', async () => {
 
     try {
         // 2. マイクの利用許可リクエスト
+        // ★修正：モノラル（1ch）入力を明示的にリクエスト
         localStream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, 
+            audio: { 
+                echoCancellation: false, 
+                noiseSuppression: false, 
+                autoGainControl: false,
+                channelCount: 1 // モノラルマイクを要求
+            }, 
             video: false 
         });
 
         mediaStreamSource = audioCtx.createMediaStreamSource(localStream);
 
-        // 3. マイク音を出力（イヤホン）へ直結
-        mediaStreamSource.connect(audioCtx.destination);
+        // ★追加：音量増幅器（GainNode）を作成
+        gainNode = audioCtx.createGain();
+
+        // ★重要：増幅率（ゲイン）を設定（1.0が通常、10.0で10倍、50.0で50倍など）
+        // ⚠️難聴者向けに大胆に「20倍」に設定します。
+        // もしこれでも足りなければこの数字を 30.0 や 50.0 に上げてください。
+        gainNode.gain.value = 20.0; 
+
+        // ★修正：左右両耳から聞こえるように設定
+        // マイク入力（1ch）を、増幅器の入力（2ch）に自動的に配る設定
+        mediaStreamSource.channelCountMode = 'explicit';
+        mediaStreamSource.channelInterpretation = 'speakers';
+
+        // 3. 音声を繋ぐ（マイク ＞ ★増幅器 ＞ ★左右両方の出力）
+        // mediaStreamSource.connect(audioCtx.destination); // 修正前（直結）
+        mediaStreamSource.connect(gainNode); // マイクを増幅器へ
+        gainNode.connect(audioCtx.destination); // 増幅器を出力へ
 
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        statusText.innerText = "⚡ 集音中...（マイクに近づけてね）";
+        statusText.innerText = "⚡ 集音中...（左右両耳・爆音）";
         statusText.style.color = "#34c759";
     } catch (err) {
         console.error(err);
@@ -101,6 +126,9 @@ stopBtn.addEventListener('click', () => {
     // 音声ストリームを完全に停止
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
+    }
+    if (gainNode) {
+        gainNode.disconnect(); // 増幅器の接続を切る
     }
     if (audioCtx) {
         audioCtx.close().then(() => {
