@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>両耳爆音！耳ともサポート</title>
+    <title>音声特化！耳ともサポート</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -43,9 +43,9 @@
 
 <div class="container">
     <h1>👂 耳ともサポート</h1>
-    <h1>【左右ステレオ結合モード】</h1>
-    <p class="warning">⚠️注意：音が非常に大きくなります。<br>必ずイヤホンを装着してください。</p>
-    <p class="desc">マイクのモノラル音声を、内部で左右両方のチャンネルへ完全にコピーして結合しました。両耳から大音量で聞こえます。</p>
+    <h1>【音声くっきりモード】</h1>
+    <p class="warning">⚠️注意：音が大きく増幅されます。<br>必ずイヤホンを装着してください。</p>
+    <p class="desc">風切り音などの不快な雑音を大幅にカットし、人の声の周波数（中高音域）だけを狙って強力に増幅します。</p>
     
     <button id="startBtn">▶ 集音スタート</button>
     <button id="stopBtn" disabled>■ ストップ</button>
@@ -57,6 +57,8 @@
 let audioCtx = null;
 let mediaStreamSource = null;
 let localStream = null;
+let lowCutFilter = null;   // 低音カット用
+let voiceBoostFilter = null; // 声の強調用
 let gainNode = null;
 let splitter = null;
 let merger = null;
@@ -78,40 +80,49 @@ startBtn.addEventListener('click', async () => {
     initAudioContext();
 
     try {
-        // iOS Safariの制御不可能なマイクバグを考慮し、OS標準の最適設定でマイクを取得
         localStream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { 
-                echoCancellation: false, 
-                noiseSuppression: false, 
-                autoGainControl: false
-            }, 
+            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }, 
             video: false 
         });
 
         mediaStreamSource = audioCtx.createMediaStreamSource(localStream);
 
-        // 1. アンプ（増幅器）の作成と設定
+        // 1. 【ノイズ対策】ハイパスフィルター（低音カット）の設定
+        // 350Hz以下の「ボボボ」「ゴー」という風切り音や環境音をバッサリ削る
+        lowCutFilter = audioCtx.createBiquadFilter();
+        lowCutFilter.type = "highpass";
+        lowCutFilter.frequency.value = 350; 
+
+        // 2. 【人の声強調】ピーキングフィルター（特定の帯域を狙い撃ち）の設定
+        // 人の声の輪郭（子音など）が一番集まる 2500Hz をピンポイントで 12分音量を上げる
+        voiceBoostFilter = audioCtx.createBiquadFilter();
+        voiceBoostFilter.type = "peaking";
+        voiceBoostFilter.frequency.value = 2500;
+        voiceBoostFilter.Q.value = 1.0;          // 影響を与える帯域の広さ（1.0で程よくマイルドに）
+        voiceBoostFilter.gain.value = 12.0;       // 2500Hz付近をさらに +12dB ブースト
+
+        // 3. 全体アンプ（増幅器）の作成
         gainNode = audioCtx.createGain();
-        gainNode.gain.value = 25.0; // 25倍増幅（好みに応じて数値を調整してください）
+        gainNode.gain.value = 20.0; // フィルターで声が引き立つので、全体ゲインは少し抑えめの20倍に
 
-        // 2. ユーザー直伝：Safariのバグを回避する確実なステレオ分離・結合ルーティング
-        splitter = audioCtx.createChannelSplitter(1); // モノラル入力を1つに分解
-        merger = audioCtx.createChannelMerger(2);     // ステレオ出力用に2つを結合
+        // 4. ステレオ分離・結合（前回のルーティングを維持）
+        splitter = audioCtx.createChannelSplitter(1);
+        merger = audioCtx.createChannelMerger(2);
 
-        // 3. オーディオグラフの接続
-        mediaStreamSource.connect(gainNode); // マイク ＞ 増幅器
-        gainNode.connect(splitter);          // 増幅器 ＞ スプリッター
-
-        // 分解したモノラル信号（0番目）を、マージャーの左（0番目）と右（1番目）にそれぞれ手動コピー
+        // 5. 【重要】数珠つなぎに接続（直列のオーディオグラフ）
+        // マイク ＞ 低音カット ＞ 声強調 ＞ アンプ ＞ スプリッター ＞ マージャー ＞ 出力
+        mediaStreamSource.connect(lowCutFilter);
+        lowCutFilter.connect(voiceBoostFilter);
+        voiceBoostFilter.connect(gainNode);
+        gainNode.connect(splitter);
+        
         splitter.connect(merger, 0, 0); // 左へ
         splitter.connect(merger, 0, 1); // 右へ
-
-        // 最終出力をイヤホンへ
         merger.connect(audioCtx.destination);
 
         startBtn.disabled = true;
         stopBtn.disabled = false;
-        statusText.innerText = "⚡ 左右コピー処理で集音中...（両耳・大音量）";
+        statusText.innerText = "⚡ 音声特化フィルターで集音中...";
         statusText.style.color = "#34c759";
     } catch (err) {
         console.error(err);
@@ -124,10 +135,13 @@ stopBtn.addEventListener('click', () => {
     if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
     }
-    // ノードの接続を安全に解除
+    // すべての接続を安全に解除
+    if (mediaStreamSource) mediaStreamSource.disconnect();
+    if (lowCutFilter) lowCutFilter.disconnect();
+    if (voiceBoostFilter) voiceBoostFilter.disconnect();
+    if (gainNode) gainNode.disconnect();
     if (splitter) splitter.disconnect();
     if (merger) merger.disconnect();
-    if (gainNode) gainNode.disconnect();
     
     if (audioCtx) {
         audioCtx.close().then(() => {
